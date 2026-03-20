@@ -3,29 +3,29 @@
 <head>
     <title>RL Gridworld HW</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #f4f7f6; }
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #f4f7f6; }
         .grid-container { display: grid; gap: 2px; background-color: #444; margin: 20px auto; width: fit-content; border: 3px solid #333; }
         .cell { 
             width: 70px; height: 70px; background: white; display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; font-size: 12px; cursor: pointer; position: relative; transition: 0.2s;
+            align-items: center; justify-content: center; font-size: 12px; cursor: pointer; position: relative;
         }
-        .cell:hover { background: #eee; }
         .start { background-color: #2ecc71 !important; color: white; font-weight: bold; }
         .end { background-color: #e74c3c !important; color: white; font-weight: bold; }
         .wall { background-color: #7f8c8d !important; }
+        /* 圖一要求的最佳路徑高亮色 */
         .path-highlight { background-color: #98fb98 !important; border: 2px solid #27ae60; box-sizing: border-box; }
         .arrow { font-size: 24px; color: #2c3e50; line-height: 1; }
         .val { font-size: 10px; color: #7f8c8d; position: absolute; top: 5px; }
         .btn-group { margin: 20px; }
         button { padding: 10px 20px; font-size: 14px; cursor: pointer; border-radius: 5px; border: none; background: #3498db; color: white; margin: 0 5px; }
         button:hover { background: #2980b9; }
-        #msg { height: 30px; line-height: 30px; font-weight: bold; color: #2c3e50; }
+        #msg { height: 30px; font-weight: bold; color: #2c3e50; margin-bottom: 10px; }
     </style>
 </head>
 <body>
-    <h1>RL Gridworld: Value Iteration</h1>
+    <h1>RL Gridworld: HW1-2 & HW1-3</h1>
     <div>
-        Size (n): <input type="number" id="nInput" value="6" min="5" max="9" style="width: 40px; padding: 5px;">
+        Size n (5-9): <input type="number" id="nInput" value="6" min="5" max="9" style="width: 50px;">
         <button onclick="initGrid()" style="background: #2c3e50;">Reset Grid</button>
     </div>
 
@@ -52,7 +52,7 @@
                 const cell = document.createElement('div');
                 cell.id = `c-${r}-${c}`;
                 cell.className = 'cell';
-                cell.innerText = i + 1;
+                cell.innerText = i + 1; // HW1-1 顯示數字
                 cell.onclick = () => handleCell(r, c);
                 grid.appendChild(cell);
             }
@@ -66,18 +66,23 @@
             } else if(clickCount === 1) {
                 if(el.classList.contains('start')) return;
                 end=[r,c]; el.className='cell end'; el.innerText="END";
-                clickCount++; document.getElementById('msg').innerText=`3. Set ${n} Obstacles (Grey)`;
-            } else if(clickCount < 2 + n) {
-                if(el.classList.contains('start') || el.classList.contains('end')) return;
+                clickCount++; 
+                document.getElementById('msg').innerText = `3. Set Obstacles: 0 / ${n-2} (Grey)`;
+            } else if(clickCount < 2 + (n-2)) {
+                if(el.classList.contains('start') || el.classList.contains('end') || el.classList.contains('wall')) return;
                 walls.push([r,c]); el.className='cell wall'; el.innerText="";
                 clickCount++;
-                if(clickCount === 2+n) document.getElementById('msg').innerText="Ready! Click a Homework button below.";
+                let currentWallCount = clickCount - 2;
+                if(clickCount === 2 + (n-2)) {
+                    document.getElementById('msg').innerText = "Setup Complete! Run HW1-2 or HW1-3";
+                } else {
+                    document.getElementById('msg').innerText = `3. Set Obstacles: ${currentWallCount} / ${n-2} (Grey)`;
+                }
             }
         }
 
         async function runCalc(mode) {
-            if(!start || !end) return alert("Please setup map first!");
-            document.getElementById('msg').innerText = "Calculating...";
+            if(!start || !end) return alert("Setup map first!");
             const res = await fetch('/calculate', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -89,38 +94,31 @@
 
         function updateDisplay(data, mode) {
             // 清除高亮
-            for(let i=0; i<n*n; i++){
-                document.getElementById(`c-${Math.floor(i/n)}-${i%n}`).classList.remove('path-highlight');
-            }
+            for(let i=0; i<n*n; i++) document.getElementById(`c-${Math.floor(i/n)}-${i%n}`).classList.remove('path-highlight');
 
             for(let r=0; r<n; r++) {
                 for(let c=0; c<n; c++) {
                     let el = document.getElementById(`c-${r}-${c}`);
                     if(el.classList.contains('wall')) continue;
-                    
                     let v = data.v_matrix[r][c];
                     let p = data.policy[r][c];
-                    
                     el.innerHTML = `<div class="val">${v}</div><div class="arrow">${p}</div>`;
-                    if(r===start[0] && c===start[1]) el.innerHTML += "<br>START";
+                    if(r===start[0] && c===start[1]) el.innerHTML += "START";
                     if(r===end[0] && c===end[1]) el.innerHTML = `<div class="val">${v}</div>🚩<br>END`;
                 }
             }
 
-            if(mode === 'hw1-3') {
-                let r = start[0], c = start[1], step=0;
+            if(mode === 'hw1-3') { // 圖一效果：高亮路徑
+                let currR = start[0], currC = start[1], step=0;
                 while(step < n*n) {
-                    document.getElementById(`c-${r}-${c}`).classList.add('path-highlight');
-                    if(r === end[0] && c === end[1]) break;
-                    let p = data.policy[r][c];
-                    if(p === "↑") r--; else if(p === "↓") r++; else if(p === "←") c--; else if(p === "→") c++;
+                    document.getElementById(`c-${currR}-${currC}`).classList.add('path-highlight');
+                    if(currR === end[0] && currC === end[1]) break;
+                    let p = data.policy[currR][currC];
+                    if(p === "↑") currR--; else if(p === "↓") currR++; else if(p === "←") currC--; else if(p === "→") currC++;
                     else break;
-                    if(r<0 || r>=n || c<0 || c>=n) break;
+                    if(currR<0 || currR>=n || currC<0 || currC>=n) break;
                     step++;
                 }
-                document.getElementById('msg').innerText = "HW1-3: Optimal Path Highlighted!";
-            } else {
-                document.getElementById('msg').innerText = "HW1-2: Random Policy Evaluation";
             }
         }
         initGrid();
