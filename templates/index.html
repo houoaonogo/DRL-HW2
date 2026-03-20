@@ -1,138 +1,110 @@
-import os
-from flask import Flask, render_template, request, jsonify
 <!DOCTYPE html>
 <html>
 <head>
-    <title>RL Gridworld</title>
+    <title>HW1 Gridworld</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; }
-        .controls { margin: 20px; }
-        .grid-container {
-            display: grid;
-            gap: 2px;
-            margin: 20px auto;
-            background-color: #333;
-            border: 2px solid #333;
-            width: fit-content;
+        body { font-family: sans-serif; text-align: center; }
+        .grid-container { 
+            display: grid; gap: 1px; background-color: #333; 
+            margin: 20px auto; width: fit-content; border: 2px solid #333;
         }
-        .cell {
-            width: 60px; height: 60px;
-            background-color: white;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            font-size: 12px; cursor: pointer;
-            position: relative;
+        .cell { 
+            width: 60px; height: 60px; background: white; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 11px; cursor: pointer; position: relative;
         }
-        .cell .arrow { font-size: 20px; font-weight: bold; }
-        .cell .value { color: #666; }
-        .start { background-color: #4CAF50 !important; color: white; }
-        .end { background-color: #f44336 !important; color: white; }
-        .wall { background-color: #808080 !important; }
-        .status-bar { margin: 10px; font-weight: bold; color: #007bff; }
+        .start { background-color: #228B22 !important; color: white; } /* 綠色 */
+        .end { background-color: #FF0000 !important; color: white; }   /* 紅色 */
+        .wall { background-color: #808080 !important; }               /* 灰色 */
+        .path-highlight { background-color: #90EE90 !important; }     /* 最佳路徑淺綠色 */
+        .arrow { font-size: 20px; font-weight: bold; color: #333; }
+        .val { color: #555; font-size: 10px; }
+        .btn-group { margin: 15px; }
     </style>
 </head>
 <body>
-    <h1>Generate n x n Square</h1>
-    <div class="controls">
-        n (5-9): <input type="number" id="nSize" value="5" min="5" max="9">
+    <h2>Generate n x n Square</h2>
+    <div>
+        Enter n (5-9): <input type="number" id="nInput" value="5" min="5" max="9">
         <button onclick="initGrid()">Generate Square</button>
-        <button onclick="calculate('random')">Random Policy</button>
-        <button onclick="calculate('optimal')">Value Iteration</button>
     </div>
-    
-    <div id="status" class="status-bar">請點擊格子設定：起點 (綠)</div>
+
+    <div class="btn-group">
+        <button onclick="runCalc('hw1-2')">HW1-2: Random Policy</button>
+        <button onclick="runCalc('hw1-3')">HW1-3: Value Iteration</button>
+    </div>
+
+    <div id="msg" style="font-weight: bold; color: blue;">1. Click to set START (Green)</div>
     <div id="grid" class="grid-container"></div>
 
     <script>
-        let n, start, end, walls, clickStage;
+        let n, start=null, end=null, walls=[], clickCount=0;
 
         function initGrid() {
-            n = parseInt(document.getElementById('nSize').value);
-            start = null; end = null; walls = []; clickStage = 0;
-            document.getElementById('status').innerText = "請設定起點 (綠色)";
-            
+            n = parseInt(document.getElementById('nInput').value);
+            start=null; end=null; walls=[]; clickCount=0;
+            document.getElementById('msg').innerText = "1. Click to set START (Green)";
             const grid = document.getElementById('grid');
             grid.innerHTML = '';
             grid.style.gridTemplateColumns = `repeat(${n}, 60px)`;
-
-            for (let r = 0; r < n; r++) {
-                for (let c = 0; c < n; c++) {
-                    const div = document.createElement('div');
-                    div.id = `cell-${r}-${c}`;
-                    div.className = 'cell';
-                    div.onclick = () => handleCellClick(r, c);
-                    grid.appendChild(div);
-                }
+            for(let i=0; i<n*n; i++){
+                let r = Math.floor(i/n), c = i%n;
+                const cell = document.createElement('div');
+                cell.id = `c-${r}-${c}`;
+                cell.className = 'cell';
+                cell.innerText = i + 1; // HW1-1 顯示數字
+                cell.onclick = () => handleCell(r, c);
+                grid.appendChild(cell);
             }
         }
 
-        function handleCellClick(r, c) {
-            const cell = document.getElementById(`cell-${r}-${c}`);
-            if (clickStage === 0) {
-                start = [r, c]; cell.classList.add('start'); cell.innerText = 'START';
-                clickStage++; document.getElementById('status').innerText = "請設定終點 (紅色)";
-            } else if (clickStage === 1) {
-                if (cell.classList.contains('start')) return;
-                end = [r, c]; cell.classList.add('end'); cell.innerText = 'END';
-                clickStage++; document.getElementById('status').innerText = `請設定 ${n-2} 個障礙物 (灰色)`;
-            } else if (clickStage < 2 + (n - 2)) {
-                if (cell.classList.contains('start') || cell.classList.contains('end')) return;
-                walls.push([r, c]); cell.classList.add('wall');
-                clickStage++;
-                if (clickStage === 2 + (n-2)) document.getElementById('status').innerText = "設定完成！請選擇演算法";
+        function handleCell(r, c) {
+            let el = document.getElementById(`c-${r}-${c}`);
+            if(clickCount === 0) {
+                start=[r,c]; el.className='cell start'; el.innerText="START";
+                clickCount++; document.getElementById('msg').innerText="2. Click to set END (Red)";
+            } else if(clickCount === 1) {
+                if(el.classList.contains('start')) return;
+                end=[r,c]; el.className='cell end'; el.innerText="END";
+                clickCount++; document.getElementById('msg').innerText=`3. Click to set ${n-2} Obstacles (Grey)`;
+            } else if(clickCount < 2 + (n-2)) {
+                if(el.classList.contains('start') || el.classList.contains('end')) return;
+                walls.push([r,c]); el.className='cell wall'; el.innerText="";
+                clickCount++;
+                if(clickCount === 2+(n-2)) document.getElementById('msg').innerText="Setup Complete! Choose HW1-2 or HW1-3";
             }
         }
 
-        async function calculate(mode) {
+        async function runCalc(mode) {
+            if(!start || !end) return alert("Please setup map first!");
             const res = await fetch('/calculate', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ n, start, end, walls, mode })
             });
             const data = await res.json();
-            
-            for (let r = 0; r < n; r++) {
-                for (let c = 0; c < n; c++) {
-                    const cell = document.getElementById(`cell-${r}-${c}`);
-                    if (cell.classList.contains('wall')) continue;
+            updateDisplay(data, mode);
+        }
+
+        function updateDisplay(data, mode) {
+            for(let r=0; r<n; r++) {
+                for(let c=0; c<n; c++) {
+                    let el = document.getElementById(`c-${r}-${c}`);
+                    if(el.classList.contains('wall')) continue;
                     
-                    let content = `<div class="value">${data.v_matrix[r][c]}</div>`;
-                    if (data.policy[r][c]) {
-                        content += `<div class="arrow">${data.policy[r][c]}</div>`;
-                    }
-                    if ([r,c].toString() === start.toString()) content += "START";
-                    if ([r,c].toString() === end.toString()) content += "END";
-                    cell.innerHTML = content;
+                    let v = data.v_matrix[r][c];
+                    let p = data.policy[r][c];
+                    
+                    // 清空內容重新填充
+                    el.innerHTML = `<div class="val">${v}</div><div class="arrow">${p}</div>`;
+                    if(r===start[0] && c===start[1]) el.innerHTML += "START";
+                    if(r===end[0] && c===end[1]) el.innerHTML += "END";
                 }
             }
+            // 第三張圖片要求：HW1-3 最佳路徑高亮 (選配，視助教要求)
+            if(mode === 'hw1-3') document.getElementById('msg').innerText = "Optimal Policy & Value Displayed";
         }
         initGrid();
     </script>
 </body>
 </html>
-            new_v = v_matrix.copy()
-            for r in range(n):
-                for c in range(n):
-                    if [r, c] == end or [r, c] in walls: continue
-                    
-                    q_values = []
-                    for i, (dr, dc) in enumerate(actions):
-                        nr, nc = r + dr, c + dc
-                        if 0 <= nr < n and 0 <= nc < n and [nr, nc] not in walls:
-                            q_values.append(get_reward(nr, nc) + gamma * v_matrix[nr][nc])
-                        else:
-                            q_values.append(get_reward(r, c) + gamma * v_matrix[r][c])
-                    
-                    new_v[r][c] = max(q_values)
-                    policy[r][c] = arrows[np.argmax(q_values)]
-            v_matrix = new_v
-
-    return jsonify({
-        'v_matrix': np.round(v_matrix, 2).tolist(),
-        'policy': policy
-    })
-
-if __name__ == '__main__':
-    # Render 需要監聽 0.0.0.0
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
