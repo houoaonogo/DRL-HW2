@@ -3,7 +3,8 @@ from flask import Flask, render_template, request, jsonify
 import numpy as np
 import random
 
-app = Flask(__name__)
+# 修改這行
+app = Flask(__name__, template_folder='../templates')
 
 @app.route('/')
 def index():
